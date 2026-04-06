@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스페인어 마스터 - 200단어 퀴즈</title>
+    <!-- Firebase SDK (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
     <style>
         :root {
             --primary: #4A90E2; --success: #2ECC71; --error: #E74C3C;
@@ -36,7 +40,6 @@
         .btn-main { background-color: var(--primary); color: white; border: none; width: 100%; margin-top: 10px; padding: 15px; font-weight: bold; }
         .btn-sub { background-color: #95a5a6; color: white; border: none; width: 100%; margin-top: 10px; padding: 12px; }
         
-        /* 오답 노트 스타일 */
         .review-container { margin-top: 25px; text-align: left; border-top: 2px solid #EEE; padding-top: 20px; }
         .review-item { 
             padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem;
@@ -58,7 +61,7 @@
         <!-- 시작 화면 -->
         <div id="screen-start">
             <h1 style="font-size: 1.5rem;">🇪🇸 스페인어 기초 200단어</h1>
-            <p>데이터베이스의 200단어 중 랜덤 10문제가 출제됩니다.</p>
+            <p>서버의 200단어 중 랜덤 10문제가 출제됩니다.</p>
             <button class="btn-main" onclick="startGame()">게임 시작</button>
             <div id="seed-area" class="hidden">
                 <p style="font-size: 0.8rem; color: #e67e22; margin-top: 15px;">서버에 단어가 없습니다.</p>
@@ -78,8 +81,8 @@
             <h1>퀴즈 종료!</h1>
             <p>내 점수: <strong id="final-score" style="font-size: 2rem; color: var(--primary);">0</strong>점</p>
             
-            <input type="text" id="nickname" placeholder="랭킹용 닉네임 입력" maxlength="10">
-            <button class="btn-main" id="btn-save-score">점수 저장 및 랭킹 보기</button>
+            <input type="text" id="nickname" placeholder="닉네임 입력" maxlength="10">
+            <button class="btn-main" onclick="saveScore()">점수 저장 및 랭킹 보기</button>
 
             <div class="review-container">
                 <h3 style="margin: 0 0 15px 0;">📝 오답 다시보기</h3>
@@ -102,16 +105,13 @@
             <input type="text" id="new-word" placeholder="스페인어 단어">
             <input type="text" id="new-answer" placeholder="뜻 (정답)">
             <p style="font-size:0.8rem; color:gray;">*오답은 시스템이 자동 생성합니다.</p>
-            <button class="btn-main" id="btn-save-word">저장하기</button>
-            <button class="btn-sub" onclick="showRanking()">취소</button>
+            <button class="btn-main" onclick="saveCustomWord()">저장하기</button>
+            <button class="btn-sub" onclick="loadRanking()">취소</button>
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        // [사용자 Firebase 설정 적용]
+    <script>
+        // 1. Firebase 초기화 (제공해주신 설정값 적용)
         const firebaseConfig = {
             apiKey: "AIzaSyDfiEKEbT9AlL5Ff-iI4iB_DKUAQW4a-HI",
             authDomain: "palabra-quiz-game.firebaseapp.com",
@@ -121,15 +121,17 @@
             appId: "1:1097916767396:web:3c29ae54fb5fd36adc1a31"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
+        // 게임 상태 변수
         let quizData = [];
         let currentIdx = 0;
         let score = 0;
         let isProcessing = false;
         let sessionResults = [];
 
+        // 유틸리티: 배열 셔플
         function shuffle(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -138,18 +140,23 @@
             return array;
         }
 
+        // 화면 전환 함수
         function showScreen(screenId) {
             document.querySelectorAll('.container > div').forEach(div => div.classList.add('hidden'));
             document.getElementById(screenId).classList.remove('hidden');
         }
 
+        // 데이터 존재 여부 확인
         async function checkData() {
-            const snapshot = await getDocs(collection(db, "words"));
-            if (snapshot.empty) document.getElementById('seed-area').classList.remove('hidden');
+            const snapshot = await db.collection("words").limit(1).get();
+            if (snapshot.empty) {
+                document.getElementById('seed-area').classList.remove('hidden');
+            }
         }
         checkData();
 
-        window.seedDefaultWords = async () => {
+        // 단어 200개 일괄 추가
+        async function seedDefaultWords() {
             const list = [
                 ["Hola", "안녕"], ["Gracias", "감사"], ["Sí", "네"], ["No", "아니요"], ["Por favor", "부탁해요"],
                 ["Perdón", "미안"], ["Agua", "물"], ["Pan", "빵"], ["Leche", "우유"], ["Café", "커피"],
@@ -193,18 +200,23 @@
                 ["Internet", "인터넷"], ["Música", "음악"], ["Película", "영화"], ["Deporte", "운동"], ["Fútbol", "축구"],
                 ["Uno", "1"], ["Dos", "2"], ["Tres", "3"], ["Diez", "10"], ["Cien", "100"]
             ];
-            const batch = writeBatch(db);
-            list.forEach(i => batch.set(doc(collection(db, "words")), { word: i[0], answer: i[1] }));
+            
+            const batch = db.batch();
+            list.forEach(i => {
+                const docRef = db.collection("words").doc();
+                batch.set(docRef, { word: i[0], answer: i[1] });
+            });
             await batch.commit();
-            alert("서버에 200단어가 성공적으로 채워졌습니다!");
+            alert("200단어 로드 성공!");
             location.reload();
-        };
+        }
 
-        window.startGame = async () => {
-            const snap = await getDocs(collection(db, "words"));
+        // 게임 시작
+        async function startGame() {
+            const snap = await db.collection("words").get();
             const allWords = [];
             snap.forEach(d => allWords.push(d.data()));
-            if (allWords.length < 4) return alert("단어가 부족합니다. [기초 단어 채우기]를 먼저 눌러주세요.");
+            if (allWords.length < 4) return alert("단어가 부족합니다.");
 
             const selected = shuffle(allWords).slice(0, 10);
             const allMeanings = allWords.map(w => w.answer);
@@ -217,15 +229,18 @@
             currentIdx = 0; score = 0; sessionResults = [];
             showScreen('screen-quiz');
             loadQuestion();
-        };
+        }
 
+        // 문제 출력
         function loadQuestion() {
             isProcessing = false;
             const data = quizData[currentIdx];
             document.getElementById('progress').innerText = `${currentIdx + 1} / 10`;
             document.getElementById('question').innerText = data.word;
+            
             const optionsDiv = document.getElementById('options');
             optionsDiv.innerHTML = '';
+            
             const choices = shuffle([data.answer, ...data.wrongs]);
             choices.forEach(choice => {
                 const btn = document.createElement('button');
@@ -235,6 +250,7 @@
             });
         }
 
+        // 정답 확인
         function checkAnswer(selected, btn) {
             if (isProcessing) return;
             isProcessing = true;
@@ -263,6 +279,7 @@
             }, 1000);
         }
 
+        // 결과 렌더링 (오답노트 포함)
         function renderFinalResult() {
             showScreen('screen-result');
             document.getElementById('final-score').innerText = score;
@@ -271,31 +288,35 @@
 
             const wrongs = sessionResults.filter(r => !r.isCorrect);
             if (wrongs.length === 0) {
-                reviewList.innerHTML = '<p style="color:var(--success); font-weight:bold;">Perfect! 모든 문제를 맞혔습니다! 👏</p>';
+                reviewList.innerHTML = '<p style="color:var(--success); font-weight:bold;">완벽합니다! 👏</p>';
             } else {
                 wrongs.forEach(item => {
                     reviewList.innerHTML += `
                         <div class="review-item">
                             <span class="review-word">${item.word}</span>
-                            <span>내 선택: <span class="your-ans">${item.userPick}</span> / 정답: <span class="correct-ans">${item.correct}</span></span>
+                            <span>선택: <span class="your-ans">${item.userPick}</span> / 정답: <span class="correct-ans">${item.correct}</span></span>
                         </div>`;
                 });
             }
         }
 
-        document.getElementById('btn-save-score').onclick = async () => {
+        // 점수 저장
+        async function saveScore() {
             const nick = document.getElementById('nickname').value.trim();
             if (!nick) return alert("닉네임을 입력하세요!");
-            try {
-                await addDoc(collection(db, "scores"), { nickname: nick, score, timestamp: new Date() });
-                loadRanking();
-            } catch (e) { alert("저장 권한이 없습니다. Firestore Rules를 확인하세요."); }
-        };
+            
+            await db.collection("scores").add({
+                nickname: nick,
+                score: score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            loadRanking();
+        }
 
+        // 랭킹 불러오기
         async function loadRanking() {
             showScreen('screen-ranking');
-            const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(5));
-            const snap = await getDocs(q);
+            const snap = await db.collection("scores").orderBy("score", "desc").limit(5).get();
             const board = document.getElementById('ranking-board');
             board.innerHTML = '';
             let r = 1;
@@ -305,14 +326,24 @@
                 r++;
             });
         }
-        window.showRanking = loadRanking;
-        window.showAddWordScreen = () => showScreen('screen-add-word');
 
-        document.getElementById('btn-save-word').onclick = async () => {
+        // 단어 직접 추가 화면
+        function showAddWordScreen() {
+            showScreen('screen-add-word');
+        }
+
+        // 사용자 단어 저장
+        async function saveCustomWord() {
             const word = document.getElementById('new-word').value.trim();
             const answer = document.getElementById('new-answer').value.trim();
             if (!word || !answer) return alert("빈칸을 채워주세요!");
-            await addDoc(collection(db, "words"), { word, answer });
+            
+            await db.collection("words").add({ word, answer });
             alert("단어가 추가되었습니다!");
             document.getElementById('new-word').value = '';
-            document.get
+            document.getElementById('new-answer').value = '';
+            loadRanking();
+        }
+    </script>
+</body>
+</html>

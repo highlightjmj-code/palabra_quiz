@@ -34,12 +34,14 @@
         .correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
         .wrong { background-color: var(--error) !important; color: white; border-color: var(--error); }
         input {
-            padding: 12px; width: 100%; margin-bottom: 10px; border: 1px solid #DDD;
-            border-radius: 8px; box-sizing: border-box; font-size: 1rem;
+            padding: 15px; width: 100%; margin-bottom: 15px; border: 2px solid #DDD;
+            border-radius: 12px; box-sizing: border-box; font-size: 1.1rem; text-align: center;
         }
-        .btn-main { background-color: var(--primary); color: white; border: none; width: 100%; margin-top: 10px; padding: 15px; font-weight: bold; }
+        input:focus { border-color: var(--primary); outline: none; }
+        .btn-main { background-color: var(--primary); color: white; border: none; width: 100%; margin-top: 10px; padding: 15px; font-weight: bold; font-size: 1.1rem; }
         .btn-sub { background-color: #95a5a6; color: white; border: none; width: 100%; margin-top: 10px; padding: 12px; }
         
+        /* 오답 노트 및 랭킹 스타일 */
         .review-container { margin-top: 25px; text-align: left; border-top: 2px solid #EEE; padding-top: 20px; }
         .review-item { 
             padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem;
@@ -53,20 +55,20 @@
             display: flex; justify-content: space-between; padding: 12px; 
             border-bottom: 1px solid #EEE; background: #fafafa; margin-bottom: 5px; border-radius: 5px;
         }
+        #loading-msg { font-size: 0.8rem; color: #999; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <!-- 시작 화면 -->
+        <!-- 시작 화면: 닉네임 입력 -->
         <div id="screen-start">
-            <h1 style="font-size: 1.5rem;">🇪🇸 스페인어 기초 200단어</h1>
-            <p>서버의 200단어 중 랜덤 10문제가 출제됩니다.</p>
-            <button class="btn-main" onclick="startGame()">게임 시작</button>
-            <div id="seed-area" class="hidden">
-                <p style="font-size: 0.8rem; color: #e67e22; margin-top: 15px;">서버에 단어가 없습니다.</p>
-                <button style="background:#f39c12; color:white; border:none; width:100%; padding:10px; border-radius:10px; cursor:pointer;" onclick="seedDefaultWords()">기초 단어 200개 채우기</button>
-            </div>
+            <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">🇪🇸 스페인어 퀴즈</h1>
+            <p style="color: #666; margin-bottom: 2rem;">기초 200단어를 마스터해보세요!</p>
+            
+            <input type="text" id="nickname-input" placeholder="닉네임을 입력하세요" maxlength="10">
+            <button class="btn-main" onclick="startGame()">게임 시작하기</button>
+            <div id="loading-msg">서버 연결 확인 중...</div>
         </div>
 
         <!-- 퀴즈 화면 -->
@@ -76,19 +78,19 @@
             <div class="options-grid" id="options"></div>
         </div>
 
-        <!-- 결과 및 오답노트 화면 -->
+        <!-- 결과 화면 (점수 저장 자동 실행) -->
         <div id="screen-result" class="hidden">
-            <h1>퀴즈 종료!</h1>
-            <p>내 점수: <strong id="final-score" style="font-size: 2rem; color: var(--primary);">0</strong>점</p>
+            <h1>퀴즈 결과</h1>
+            <p><span id="user-display-name" style="font-weight: bold;"></span>님의 점수</p>
+            <strong id="final-score" style="font-size: 3rem; color: var(--primary);">0</strong>점
             
-            <input type="text" id="nickname" placeholder="닉네임 입력" maxlength="10">
-            <button class="btn-main" onclick="saveScore()">점수 저장 및 랭킹 보기</button>
+            <button class="btn-main" onclick="showRankingScreen()">실시간 랭킹 보기</button>
 
             <div class="review-container">
-                <h3 style="margin: 0 0 15px 0;">📝 오답 다시보기</h3>
+                <h3 style="margin: 0 0 15px 0;">📝 틀린 문제 복습</h3>
                 <div id="review-list"></div>
             </div>
-            <button class="btn-sub" onclick="location.reload()">처음으로</button>
+            <button class="btn-sub" onclick="location.reload()">처음으로 돌아가기</button>
         </div>
 
         <!-- 랭킹 화면 -->
@@ -96,22 +98,11 @@
             <h1>🏆 TOP 5 랭킹</h1>
             <ul id="ranking-board" style="list-style:none; padding:0; text-align:left;"></ul>
             <button class="btn-main" onclick="location.reload()">다시 도전하기</button>
-            <button class="btn-sub" onclick="showAddWordScreen()">단어 직접 추가</button>
-        </div>
-
-        <!-- 단어 추가 화면 -->
-        <div id="screen-add-word" class="hidden">
-            <h1>단어 추가</h1>
-            <input type="text" id="new-word" placeholder="스페인어 단어">
-            <input type="text" id="new-answer" placeholder="뜻 (정답)">
-            <p style="font-size:0.8rem; color:gray;">*오답은 시스템이 자동 생성합니다.</p>
-            <button class="btn-main" onclick="saveCustomWord()">저장하기</button>
-            <button class="btn-sub" onclick="loadRanking()">취소</button>
         </div>
     </div>
 
     <script>
-        // 1. Firebase 초기화 (제공해주신 설정값 적용)
+        // 1. Firebase 설정
         const firebaseConfig = {
             apiKey: "AIzaSyDfiEKEbT9AlL5Ff-iI4iB_DKUAQW4a-HI",
             authDomain: "palabra-quiz-game.firebaseapp.com",
@@ -124,14 +115,82 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 게임 상태 변수
+        // 2. 기초 단어 200개 리스트
+        const defaultWords = [
+            ["Hola", "안녕"], ["Gracias", "감사"], ["Sí", "네"], ["No", "아니요"], ["Por favor", "부탁해요"],
+            ["Perdón", "미안"], ["Agua", "물"], ["Pan", "빵"], ["Leche", "우유"], ["Café", "커피"],
+            ["Cerveza", "맥주"], ["Vino", "와인"], ["Comida", "음식"], ["Fruta", "과일"], ["Carne", "고기"],
+            ["Pescado", "생선"], ["Huevo", "계란"], ["Arroz", "쌀/밥"], ["Sal", "소금"], ["Azúcar", "설탕"],
+            ["Casa", "집"], ["Escuela", "학교"], ["Libro", "책"], ["Lápiz", "연필"], ["Mesa", "책상"],
+            ["Silla", "의자"], ["Puerta", "문"], ["Ventana", "창문"], ["Cama", "침대"], ["Baño", "화장실"],
+            ["Ropa", "옷"], ["Zapato", "신발"], ["Reloj", "시계"], ["Dinero", "돈"], ["Tarjeta", "카드"],
+            ["Coche", "자동차"], ["Bicicleta", "자전거"], ["Avión", "비행기"], ["Tren", "기차"], ["Autobús", "버스"],
+            ["Calle", "길"], ["Ciudad", "도시"], ["País", "나라"], ["Mundo", "세계"], ["Sol", "태양"],
+            ["Luna", "달"], ["Estrella", "별"], ["Cielo", "하늘"], ["Mar", "바다"], ["Montaña", "산"],
+            ["Flor", "꽃"], ["Árbol", "나무"], ["Perro", "개"], ["Gato", "고양이"], ["Pájaro", "새"],
+            ["Hombre", "남자"], ["Mujer", "여자"], ["Niño", "아이"], ["Amigo", "친구"], ["Familia", "가족"],
+            ["Padre", "아버지"], ["Madre", "어머니"], ["Hermano", "형제"], ["Hermana", "자매"], ["Abuelo", "할아버지"],
+            ["Abuela", "할머니"], ["Hijo", "아들"], ["Hija", "딸"], ["Médico", "의사"], ["Profesor", "선생님"],
+            ["Estudiante", "학생"], ["Trabajo", "일"], ["Tiempo", "시간/날씨"], ["Hoy", "오늘"], ["Mañana", "내일"],
+            ["Ayer", "어제"], ["Ahora", "지금"], ["Después", "나중에"], ["Día", "낮"], ["Noche", "밤"],
+            ["Semana", "주"], ["Mes", "달"], ["Año", "년"], ["Hora", "시"], ["Minuto", "분"],
+            ["Lunes", "월요일"], ["Martes", "화요일"], ["Miércoles", "수요일"], ["Jueves", "목요일"], ["Viernes", "금요일"],
+            ["Sábado", "토요일"], ["Domingo", "일요일"], ["Rojo", "빨간색"], ["Azul", "파란색"], ["Verde", "초록색"],
+            ["Blanco", "하얀색"], ["Negro", "검은색"], ["Amarillo", "노란색"], ["Grande", "큰"], ["Pequeño", "작은"],
+            ["Bueno", "좋은"], ["Malo", "나쁜"], ["Feliz", "행복한"], ["Triste", "슬픈"], ["Cansado", "피곤한"],
+            ["Caliente", "뜨거운"], ["Frío", "차가운"], ["Mucho", "많은"], ["Poco", "적은"], ["Nuevo", "새로운"],
+            ["Viejo", "오래된"], ["Rápido", "빠른"], ["Lento", "느린"], ["Fácil", "쉬운"], ["Difícil", "어려운"],
+            ["Comer", "먹다"], ["Beber", "마시다"], ["Ir", "가다"], ["Venir", "오다"], ["Ver", "보다"],
+            ["Hablar", "말하다"], ["Escuchar", "듣다"], ["Leer", "읽다"], ["Escribir", "쓰다"], ["Dormir", "자다"],
+            ["Trabajar", "일하다"], ["Estudiar", "공부하다"], ["Comprar", "사다"], ["Vivir", "살다"], ["Tener", "가지다"],
+            ["Querer", "원하다"], ["Saber", "알다"], ["Hacer", "하다"], ["Poder", "할 수 있다"], ["Dar", "주다"],
+            ["Llamar", "부르다"], ["Preguntar", "묻다"], ["Cerrar", "닫다"], ["Abrir", "열다"], ["Cantar", "노래하다"],
+            ["Bailar", "춤추다"], ["Viajar", "여행하다"], ["Ayudar", "돕다"], ["Buscar", "찾다"], ["Esperar", "기다리다"],
+            ["Cabeza", "머리"], ["Mano", "손"], ["Pie", "발"], ["Ojo", "눈"], ["Boca", "입"],
+            ["Corazón", "심장"], ["Cuerpo", "몸"], ["Salud", "건강"], ["Amor", "사랑"], ["Paz", "평화"],
+            ["Derecha", "오른쪽"], ["Izquierda", "왼쪽"], ["Arriba", "위"], ["Abajo", "아래"], ["Cerca", "가까운"],
+            ["Lejos", "먼"], ["Dentro", "안에"], ["Fuera", "밖에"], ["Primero", "첫 번째"], ["Último", "마지막"],
+            ["Verano", "여름"], ["Invierno", "겨울"], ["Primavera", "봄"], ["Otoño", "가을"], ["Fruta", "과일"],
+            ["Verdura", "채소"], ["Carne", "고기"], ["Pollo", "닭고기"], ["Sopa", "스프"], ["Ensalada", "샐러드"],
+            ["Queso", "치즈"], ["Zumo", "주스"], ["Té", "차"], ["Cuchara", "숟가락"], ["Tenedor", "포크"],
+            ["Cuchillo", "칼"], ["Plato", "접시"], ["Vaso", "컵"], ["Servilleta", "휴지"], ["Cocina", "주방"],
+            ["Sala", "거실"], ["Jardín", "정원"], ["Pared", "벽"], ["Piso", "바닥"], ["Techo", "천장"],
+            ["Papel", "종이"], ["Bolígrafo", "볼펜"], ["Silla", "의자"], ["Teléfono", "전화기"], ["Ordenador", "컴퓨터"],
+            ["Internet", "인터넷"], ["Música", "음악"], ["Película", "영화"], ["Deporte", "운동"], ["Fútbol", "축구"],
+            ["Uno", "1"], ["Dos", "2"], ["Tres", "3"], ["Diez", "10"], ["Cien", "100"]
+        ];
+
+        // 3. 변수 및 초기화
+        let userNickname = "";
         let quizData = [];
         let currentIdx = 0;
         let score = 0;
         let isProcessing = false;
         let sessionResults = [];
 
-        // 유틸리티: 배열 셔플
+        // 데이터 자동 체크 및 시딩
+        async function autoSeedData() {
+            try {
+                const snapshot = await db.collection("words").limit(1).get();
+                if (snapshot.empty) {
+                    document.getElementById('loading-msg').innerText = "기초 단어 데이터 생성 중...";
+                    const batch = db.batch();
+                    defaultWords.forEach(i => {
+                        const docRef = db.collection("words").doc();
+                        batch.set(docRef, { word: i[0], answer: i[1] });
+                    });
+                    await batch.commit();
+                    document.getElementById('loading-msg').innerText = "데이터 준비 완료!";
+                } else {
+                    document.getElementById('loading-msg').innerText = "서버 연결 완료!";
+                }
+            } catch (e) {
+                document.getElementById('loading-msg').innerText = "서버 연결 오류. 다시 시도해주세요.";
+            }
+        }
+        autoSeedData();
+
+        // 유틸리티
         function shuffle(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -140,83 +199,21 @@
             return array;
         }
 
-        // 화면 전환 함수
         function showScreen(screenId) {
             document.querySelectorAll('.container > div').forEach(div => div.classList.add('hidden'));
             document.getElementById(screenId).classList.remove('hidden');
         }
 
-        // 데이터 존재 여부 확인
-        async function checkData() {
-            const snapshot = await db.collection("words").limit(1).get();
-            if (snapshot.empty) {
-                document.getElementById('seed-area').classList.remove('hidden');
-            }
-        }
-        checkData();
-
-        // 단어 200개 일괄 추가
-        async function seedDefaultWords() {
-            const list = [
-                ["Hola", "안녕"], ["Gracias", "감사"], ["Sí", "네"], ["No", "아니요"], ["Por favor", "부탁해요"],
-                ["Perdón", "미안"], ["Agua", "물"], ["Pan", "빵"], ["Leche", "우유"], ["Café", "커피"],
-                ["Cerveza", "맥주"], ["Vino", "와인"], ["Comida", "음식"], ["Fruta", "과일"], ["Carne", "고기"],
-                ["Pescado", "생선"], ["Huevo", "계란"], ["Arroz", "쌀/밥"], ["Sal", "소금"], ["Azúcar", "설탕"],
-                ["Casa", "집"], ["Escuela", "학교"], ["Libro", "책"], ["Lápiz", "연필"], ["Mesa", "책상"],
-                ["Silla", "의자"], ["Puerta", "문"], ["Ventana", "창문"], ["Cama", "침대"], ["Baño", "화장실"],
-                ["Ropa", "옷"], ["Zapato", "신발"], ["Reloj", "시계"], ["Dinero", "돈"], ["Tarjeta", "카드"],
-                ["Coche", "자동차"], ["Bicicleta", "자전거"], ["Avión", "비행기"], ["Tren", "기차"], ["Autobús", "버스"],
-                ["Calle", "길"], ["Ciudad", "도시"], ["País", "나라"], ["Mundo", "세계"], ["Sol", "태양"],
-                ["Luna", "달"], ["Estrella", "별"], ["Cielo", "하늘"], ["Mar", "바다"], ["Montaña", "산"],
-                ["Flor", "꽃"], ["Árbol", "나무"], ["Perro", "개"], ["Gato", "고양이"], ["Pájaro", "새"],
-                ["Hombre", "남자"], ["Mujer", "여자"], ["Niño", "아이"], ["Amigo", "친구"], ["Familia", "가족"],
-                ["Padre", "아버지"], ["Madre", "어머니"], ["Hermano", "형제"], ["Hermana", "자매"], ["Abuelo", "할아버지"],
-                ["Abuela", "할머니"], ["Hijo", "아들"], ["Hija", "딸"], ["Médico", "의사"], ["Profesor", "선생님"],
-                ["Estudiante", "학생"], ["Trabajo", "일"], ["Tiempo", "시간/날씨"], ["Hoy", "오늘"], ["Mañana", "내일"],
-                ["Ayer", "어제"], ["Ahora", "지금"], ["Después", "나중에"], ["Día", "낮"], ["Noche", "밤"],
-                ["Semana", "주"], ["Mes", "달"], ["Año", "년"], ["Hora", "시"], ["Minuto", "분"],
-                ["Lunes", "월요일"], ["Martes", "화요일"], ["Miércoles", "수요일"], ["Jueves", "목요일"], ["Viernes", "금요일"],
-                ["Sábado", "토요일"], ["Domingo", "일요일"], ["Rojo", "빨간색"], ["Azul", "파란색"], ["Verde", "초록색"],
-                ["Blanco", "하얀색"], ["Negro", "검은색"], ["Amarillo", "노란색"], ["Grande", "큰"], ["Pequeño", "작은"],
-                ["Bueno", "좋은"], ["Malo", "나쁜"], ["Feliz", "행복한"], ["Triste", "슬픈"], ["Cansado", "피곤한"],
-                ["Caliente", "뜨거운"], ["Frío", "차가운"], ["Mucho", "많은"], ["Poco", "적은"], ["Nuevo", "새로운"],
-                ["Viejo", "오래된"], ["Rápido", "빠른"], ["Lento", "느린"], ["Fácil", "쉬운"], ["Difícil", "어려운"],
-                ["Comer", "먹다"], ["Beber", "마시다"], ["Ir", "가다"], ["Venir", "오다"], ["Ver", "보다"],
-                ["Hablar", "말하다"], ["Escuchar", "듣다"], ["Leer", "읽다"], ["Escribir", "쓰다"], ["Dormir", "자다"],
-                ["Trabajar", "일하다"], ["Estudiar", "공부하다"], ["Comprar", "사다"], ["Vivir", "살다"], ["Tener", "가지다"],
-                ["Querer", "원하다"], ["Saber", "알다"], ["Hacer", "하다"], ["Poder", "할 수 있다"], ["Dar", "주다"],
-                ["Llamar", "부르다"], ["Preguntar", "묻다"], ["Cerrar", "닫다"], ["Abrir", "열다"], ["Cantar", "노래하다"],
-                ["Bailar", "춤추다"], ["Viajar", "여행하다"], ["Ayudar", "돕다"], ["Buscar", "찾다"], ["Esperar", "기다리다"],
-                ["Cabeza", "머리"], ["Mano", "손"], ["Pie", "발"], ["Ojo", "눈"], ["Boca", "입"],
-                ["Corazón", "심장"], ["Cuerpo", "몸"], ["Salud", "건강"], ["Amor", "사랑"], ["Paz", "평화"],
-                ["Derecha", "오른쪽"], ["Izquierda", "왼쪽"], ["Arriba", "위"], ["Abajo", "아래"], ["Cerca", "가까운"],
-                ["Lejos", "먼"], ["Dentro", "안에"], ["Fuera", "밖에"], ["Primero", "첫 번째"], ["Último", "마지막"],
-                ["Verano", "여름"], ["Invierno", "겨울"], ["Primavera", "봄"], ["Otoño", "가을"], ["Fruta", "과일"],
-                ["Verdura", "채소"], ["Carne", "고기"], ["Pollo", "닭고기"], ["Sopa", "스프"], ["Ensalada", "샐러드"],
-                ["Queso", "치즈"], ["Zumo", "주스"], ["Té", "차"], ["Cuchara", "숟가락"], ["Tenedor", "포크"],
-                ["Cuchillo", "칼"], ["Plato", "접시"], ["Vaso", "컵"], ["Servilleta", "휴지"], ["Cocina", "주방"],
-                ["Sala", "거실"], ["Jardín", "정원"], ["Pared", "벽"], ["Piso", "바닥"], ["Techo", "천장"],
-                ["Papel", "종이"], ["Bolígrafo", "볼펜"], ["Silla", "의자"], ["Teléfono", "전화기"], ["Ordenador", "컴퓨터"],
-                ["Internet", "인터넷"], ["Música", "음악"], ["Película", "영화"], ["Deporte", "운동"], ["Fútbol", "축구"],
-                ["Uno", "1"], ["Dos", "2"], ["Tres", "3"], ["Diez", "10"], ["Cien", "100"]
-            ];
-            
-            const batch = db.batch();
-            list.forEach(i => {
-                const docRef = db.collection("words").doc();
-                batch.set(docRef, { word: i[0], answer: i[1] });
-            });
-            await batch.commit();
-            alert("200단어 로드 성공!");
-            location.reload();
-        }
-
-        // 게임 시작
+        // 4. 게임 로직
         async function startGame() {
+            userNickname = document.getElementById('nickname-input').value.trim();
+            if (!userNickname) return alert("닉네임을 입력해주세요!");
+
             const snap = await db.collection("words").get();
             const allWords = [];
             snap.forEach(d => allWords.push(d.data()));
-            if (allWords.length < 4) return alert("단어가 부족합니다.");
+            
+            if (allWords.length < 4) return alert("데이터 로딩 중입니다. 잠시만 기다려주세요.");
 
             const selected = shuffle(allWords).slice(0, 10);
             const allMeanings = allWords.map(w => w.answer);
@@ -231,7 +228,6 @@
             loadQuestion();
         }
 
-        // 문제 출력
         function loadQuestion() {
             isProcessing = false;
             const data = quizData[currentIdx];
@@ -250,7 +246,6 @@
             });
         }
 
-        // 정답 확인
         function checkAnswer(selected, btn) {
             if (isProcessing) return;
             isProcessing = true;
@@ -272,20 +267,22 @@
                 });
             }
 
-            setTimeout(() => {
+            setTimeout(async () => {
                 currentIdx++;
                 if (currentIdx < 10) loadQuestion();
-                else renderFinalResult();
+                else await finishGame();
             }, 1000);
         }
 
-        // 결과 렌더링 (오답노트 포함)
-        function renderFinalResult() {
+        // 게임 종료 및 자동 저장
+        async function finishGame() {
             showScreen('screen-result');
+            document.getElementById('user-display-name').innerText = userNickname;
             document.getElementById('final-score').innerText = score;
+            
+            // 오답노트 렌더링
             const reviewList = document.getElementById('review-list');
             reviewList.innerHTML = '';
-
             const wrongs = sessionResults.filter(r => !r.isCorrect);
             if (wrongs.length === 0) {
                 reviewList.innerHTML = '<p style="color:var(--success); font-weight:bold;">완벽합니다! 👏</p>';
@@ -298,23 +295,21 @@
                         </div>`;
                 });
             }
+
+            // 점수 서버 자동 저장
+            try {
+                await db.collection("scores").add({
+                    nickname: userNickname,
+                    score: score,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) {
+                console.error("Score save error", e);
+            }
         }
 
-        // 점수 저장
-        async function saveScore() {
-            const nick = document.getElementById('nickname').value.trim();
-            if (!nick) return alert("닉네임을 입력하세요!");
-            
-            await db.collection("scores").add({
-                nickname: nick,
-                score: score,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            loadRanking();
-        }
-
-        // 랭킹 불러오기
-        async function loadRanking() {
+        // 랭킹 화면 표시
+        async function showRankingScreen() {
             showScreen('screen-ranking');
             const snap = await db.collection("scores").orderBy("score", "desc").limit(5).get();
             const board = document.getElementById('ranking-board');
@@ -325,24 +320,6 @@
                 board.innerHTML += `<li class="ranking-item"><span>${r}. ${data.nickname}</span><strong>${data.score}점</strong></li>`;
                 r++;
             });
-        }
-
-        // 단어 직접 추가 화면
-        function showAddWordScreen() {
-            showScreen('screen-add-word');
-        }
-
-        // 사용자 단어 저장
-        async function saveCustomWord() {
-            const word = document.getElementById('new-word').value.trim();
-            const answer = document.getElementById('new-answer').value.trim();
-            if (!word || !answer) return alert("빈칸을 채워주세요!");
-            
-            await db.collection("words").add({ word, answer });
-            alert("단어가 추가되었습니다!");
-            document.getElementById('new-word').value = '';
-            document.getElementById('new-answer').value = '';
-            loadRanking();
         }
     </script>
 </body>
